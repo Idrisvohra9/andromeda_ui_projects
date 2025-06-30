@@ -2,7 +2,15 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { IoClose, IoTime, IoCheckmarkCircle, IoCheckbox, IoCheckboxOutline, IoAdd, IoCalendar } from "react-icons/io5";
+import {
+  IoClose,
+  IoTime,
+  IoCheckmarkCircle,
+  IoCheckbox,
+  IoCheckboxOutline,
+  IoAdd,
+  IoCalendar,
+} from "react-icons/io5";
 import { RxDragHandleDots2 } from "react-icons/rx";
 import { clsx } from "clsx";
 
@@ -201,16 +209,31 @@ interface EventCardProps {
   onToggleComplete: (eventId: string) => void;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, onDragStart, onToggleComplete }) => {
+const EventCard: React.FC<EventCardProps> = ({
+  event,
+  onDragStart,
+  onToggleComplete,
+}) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
-  
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(
+    null
+  );
+
   // Check if task is overdue (past due date and not completed)
   const isTaskOverdue =
     isPast(new Date(event.day)) &&
     !isToday(new Date(event.day)) &&
     !event.completed;
+
+  // Utility function to prevent scroll during drag operations
+  const preventScroll = useCallback((e: TouchEvent | WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
 
   // Handle drag start event with data transfer setup
   const handleDragStart = (e: React.DragEvent) => {
@@ -221,62 +244,97 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDragStart, onToggleCompl
 
   // Handle drag end event to reset visual state
   const handleDragEnd = (e: React.DragEvent) => {
-    e.currentTarget.classList.remove("opacity-50");
+    const target = e.currentTarget as HTMLElement;
+    if (target) {
+      target.classList.remove("opacity-50");
+    }
   };
 
   // Handle drag start visual feedback
   const handleDragStartVisual = (e: React.DragEvent) => {
-    e.currentTarget.classList.add("opacity-50");
+    const target = e.currentTarget as HTMLElement;
+    if (target) {
+      target.classList.add("opacity-50");
+    }
   };
 
   // Enhanced touch handling for mobile drag and drop
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     setTouchStart({ x: touch.clientX, y: touch.clientY });
-    
+
+    // Clear any existing timer
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+    }
+
     // Add long press detection
-    const longPressTimer = setTimeout(() => {
+    const timer = setTimeout(() => {
       setIsDragging(true);
       onDragStart(event);
-      // Add visual feedback and trigger mobile drag start
-      e.currentTarget.classList.add("opacity-75", "scale-105", "z-50");
-      document.dispatchEvent(new CustomEvent('mobile-drag-start'));
-    }, 500); // 500ms long press
 
-    // Store timer ID for cleanup
-    (e.currentTarget as HTMLElement).dataset.longPressTimer = String(longPressTimer);
+      // Add visual feedback and trigger mobile drag start
+      const target = e.currentTarget as HTMLElement;
+      if (target) {
+        target.classList.add("opacity-75", "scale-105", "z-50");
+      }
+
+      document.dispatchEvent(new CustomEvent("mobile-drag-start"));
+
+      // Disable scrolling during drag
+      document.body.style.overflow = "hidden";
+      // Add dragging class to body for additional CSS rules
+      document.body.classList.add("dragging");
+
+      // Prevent default scroll behavior on document with non-passive listeners
+      document.addEventListener("touchmove", preventScroll, { passive: false });
+      document.addEventListener("wheel", preventScroll, { passive: false });
+    }, 800); // 800ms long press
+
+    setLongPressTimer(timer);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging || !touchStart) return;
-    
-    e.preventDefault(); // Prevent scrolling
+
+    // Enhanced scroll prevention - block all scroll attempts
+    try {
+    //   e.preventDefault();
+      e.stopPropagation();
+    } catch {
+      // Silently handle passive event listener errors
+      console.warn("Could not prevent default on touch move");
+    }
+
     const touch = e.touches[0];
     const deltaX = touch.clientX - touchStart.x;
     const deltaY = touch.clientY - touchStart.y;
-    
+
     setDragOffset({ x: deltaX, y: deltaY });
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     // Clear long press timer
-    const timer = (e.currentTarget as HTMLElement).dataset.longPressTimer;
-    if (timer) {
-      clearTimeout(parseInt(timer));
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
     }
 
     if (isDragging) {
       // Find drop target
       const touch = e.changedTouches[0];
-      const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-      const dropZone = elementBelow?.closest('[data-drop-zone]');
-      
+      const elementBelow = document.elementFromPoint(
+        touch.clientX,
+        touch.clientY
+      );
+      const dropZone = elementBelow?.closest("[data-drop-zone]");
+
       if (dropZone) {
-        const dayString = dropZone.getAttribute('data-drop-zone');
+        const dayString = dropZone.getAttribute("data-drop-zone");
         if (dayString && dayString !== event.day) {
           // Trigger drop
-          const dropEvent = new CustomEvent('mobile-drop', {
-            detail: { eventId: event.id, targetDay: dayString }
+          const dropEvent = new CustomEvent("mobile-drop", {
+            detail: { eventId: event.id, targetDay: dayString },
           });
           document.dispatchEvent(dropEvent);
         }
@@ -287,7 +345,22 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDragStart, onToggleCompl
     setIsDragging(false);
     setDragOffset({ x: 0, y: 0 });
     setTouchStart(null);
-    e.currentTarget.classList.remove("opacity-75", "scale-105", "z-50");
+
+    const target = e.currentTarget as HTMLElement;
+    if (target) {
+      target.classList.remove("opacity-75", "scale-105", "z-50");
+    }
+
+    // Restore scroll behavior
+    document.body.classList.remove("dragging");
+    document.body.style.overflow = "";
+
+    // Remove scroll prevention event listeners
+    document.removeEventListener("touchmove", preventScroll);
+    document.removeEventListener("wheel", preventScroll);
+
+    // Trigger mobile drag end
+    document.dispatchEvent(new CustomEvent("mobile-drag-end"));
   };
 
   // Handle checkbox toggle
@@ -295,6 +368,15 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDragStart, onToggleCompl
     e.stopPropagation(); // Prevent triggering drag events
     onToggleComplete(event.id);
   };
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+      }
+    };
+  }, [longPressTimer]);
 
   return (
     <div
@@ -314,10 +396,14 @@ const EventCard: React.FC<EventCardProps> = ({ event, onDragStart, onToggleCompl
         "border border-white/10 hover:border-white/20",
         isDragging && "fixed pointer-events-none z-50"
       )}
-      style={isDragging ? {
-        transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
-        zIndex: 9999
-      } : undefined}
+      style={
+        isDragging
+          ? {
+              transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+              zIndex: 9999,
+            }
+          : undefined
+      }
     >
       <div className="flex items-center">
         <div className="touch-none flex-shrink-0">
@@ -422,25 +508,46 @@ const DayColumn: React.FC<DayColumnProps> = ({
 
     // Add visual feedback for mobile drag
     const handleMobileDragStart = () => {
-      document.querySelectorAll('[data-drop-zone]').forEach(zone => {
-        zone.classList.add('mobile-drag-active');
+      document.querySelectorAll("[data-drop-zone]").forEach((zone) => {
+        zone.classList.add("mobile-drag-active");
       });
+
+      // Additional global scroll lock for better UX on mobile
+      const viewport = document.querySelector("meta[name=viewport]");
+      if (viewport) {
+        viewport.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        );
+      }
     };
 
     const handleMobileDragEnd = () => {
-      document.querySelectorAll('[data-drop-zone]').forEach(zone => {
-        zone.classList.remove('mobile-drag-active');
+      document.querySelectorAll("[data-drop-zone]").forEach((zone) => {
+        zone.classList.remove("mobile-drag-active");
       });
+
+      // Restore normal viewport behavior
+      const viewport = document.querySelector("meta[name=viewport]");
+      if (viewport) {
+        viewport.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1.0"
+        );
+      }
     };
 
-    document.addEventListener('mobile-drop', handleMobileDrop as EventListener);
-    document.addEventListener('mobile-drag-start', handleMobileDragStart);
-    document.addEventListener('mobile-drag-end', handleMobileDragEnd);
-    
+    document.addEventListener("mobile-drop", handleMobileDrop as EventListener);
+    document.addEventListener("mobile-drag-start", handleMobileDragStart);
+    document.addEventListener("mobile-drag-end", handleMobileDragEnd);
+
     return () => {
-      document.removeEventListener('mobile-drop', handleMobileDrop as EventListener);
-      document.removeEventListener('mobile-drag-start', handleMobileDragStart);
-      document.removeEventListener('mobile-drag-end', handleMobileDragEnd);
+      document.removeEventListener(
+        "mobile-drop",
+        handleMobileDrop as EventListener
+      );
+      document.removeEventListener("mobile-drag-start", handleMobileDragStart);
+      document.removeEventListener("mobile-drag-end", handleMobileDragEnd);
     };
   }, [dayString, onDrop]);
 
@@ -502,11 +609,11 @@ const DayColumn: React.FC<DayColumnProps> = ({
       <div className="hidden md:block h-full min-h-[200px]">
         {events.length > 0 ? (
           events.map((event) => (
-            <EventCard 
-              key={event.id} 
-              event={event} 
+            <EventCard
+              key={event.id}
+              event={event}
               onDragStart={onDragStart}
-              onToggleComplete={onToggleComplete} 
+              onToggleComplete={onToggleComplete}
             />
           ))
         ) : (
@@ -604,12 +711,19 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
                         <button
                           onClick={() => onToggleComplete(event.id)}
                           className="text-white/70 hover:text-white transition-colors p-1 ml-3"
-                          title={event.completed ? "Mark as incomplete" : "Mark as complete"}
+                          title={
+                            event.completed
+                              ? "Mark as incomplete"
+                              : "Mark as complete"
+                          }
                         >
                           {event.completed ? (
                             <IoCheckbox size={20} className="text-green-300" />
                           ) : (
-                            <IoCheckboxOutline size={20} className="hover:text-green-300" />
+                            <IoCheckboxOutline
+                              size={20}
+                              className="hover:text-green-300"
+                            />
                           )}
                         </button>
                       </div>
@@ -650,7 +764,7 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
 interface AddEventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddEvent: (event: Omit<Event, 'id'>) => void;
+  onAddEvent: (event: Omit<Event, "id">) => void;
   selectedDate?: string;
 }
 
@@ -660,22 +774,25 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
   onAddEvent,
   selectedDate,
 }) => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedDay, setSelectedDay] = useState(selectedDate || '');
-  const [selectedColor, setSelectedColor] = useState('bg-cyan-500');
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedDay, setSelectedDay] = useState(selectedDate || "");
+  const [selectedColor, setSelectedColor] = useState("bg-cyan-500");
 
   // Available color options for events
-  const colorOptions = useMemo(() => [
-    { value: 'bg-cyan-500', label: 'Cyan', bg: 'bg-cyan-500' },
-    { value: 'bg-purple-500', label: 'Purple', bg: 'bg-purple-500' },
-    { value: 'bg-pink-500', label: 'Pink', bg: 'bg-pink-500' },
-    { value: 'bg-yellow-400', label: 'Yellow', bg: 'bg-yellow-400' },
-    { value: 'bg-green-500', label: 'Green', bg: 'bg-green-500' },
-    { value: 'bg-blue-500', label: 'Blue', bg: 'bg-blue-500' },
-    { value: 'bg-red-500', label: 'Red', bg: 'bg-red-500' },
-    { value: 'bg-indigo-500', label: 'Indigo', bg: 'bg-indigo-500' },
-  ], []);
+  const colorOptions = useMemo(
+    () => [
+      { value: "bg-cyan-500", label: "Cyan", bg: "bg-cyan-500" },
+      { value: "bg-purple-500", label: "Purple", bg: "bg-purple-500" },
+      { value: "bg-pink-500", label: "Pink", bg: "bg-pink-500" },
+      { value: "bg-yellow-400", label: "Yellow", bg: "bg-yellow-400" },
+      { value: "bg-green-500", label: "Green", bg: "bg-green-500" },
+      { value: "bg-blue-500", label: "Blue", bg: "bg-blue-500" },
+      { value: "bg-red-500", label: "Red", bg: "bg-red-500" },
+      { value: "bg-indigo-500", label: "Indigo", bg: "bg-indigo-500" },
+    ],
+    []
+  );
 
   // Generate week dates for date selector
   const weekDates = useMemo(() => {
@@ -687,10 +804,10 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      setTitle('');
-      setDescription('');
-      setSelectedDay(selectedDate || formatDate(new Date(), 'yyyy-MM-dd'));
-      setSelectedColor('bg-cyan-500');
+      setTitle("");
+      setDescription("");
+      setSelectedDay(selectedDate || formatDate(new Date(), "yyyy-MM-dd"));
+      setSelectedColor("bg-cyan-500");
     }
   }, [isOpen, selectedDate]);
 
@@ -699,7 +816,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
-    const newEvent: Omit<Event, 'id'> = {
+    const newEvent: Omit<Event, "id"> = {
       title: title.trim(),
       description: description.trim(),
       day: selectedDay,
@@ -719,7 +836,8 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/60 backdrop-
+          blur-sm z-50 flex items-center justify-center p-4"
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 50 }}
@@ -783,26 +901,31 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                 </label>
                 <div className="grid grid-cols-7 gap-1">
                   {weekDates.map((date) => {
-                    const dateString = formatDate(date, 'yyyy-MM-dd');
+                    const dateString = formatDate(date, "yyyy-MM-dd");
                     const isSelected = selectedDay === dateString;
-                    const isToday = formatDate(new Date(), 'yyyy-MM-dd') === dateString;
-                    
+                    const isToday =
+                      formatDate(new Date(), "yyyy-MM-dd") === dateString;
+
                     return (
                       <button
                         key={dateString}
                         type="button"
                         onClick={() => setSelectedDay(dateString)}
                         className={clsx(
-                          'p-2 rounded-lg text-xs font-medium transition-all duration-200',
+                          "p-2 rounded-lg text-xs font-medium transition-all duration-200",
                           isSelected
-                            ? 'bg-purple-500 text-white shadow-lg'
-                            : 'bg-white/10 text-gray-300 hover:bg-white/20',
-                          isToday && !isSelected && 'border border-purple-400'
+                            ? "bg-purple-500 text-white shadow-lg"
+                            : "bg-white/10 text-gray-300 hover:bg-white/20",
+                          isToday && !isSelected && "border border-purple-400"
                         )}
                       >
                         <div className="text-center">
-                          <div className="text-xs">{formatDate(date, 'EEE')}</div>
-                          <div className="font-bold">{formatDate(date, 'd')}</div>
+                          <div className="text-xs">
+                            {formatDate(date, "EEE")}
+                          </div>
+                          <div className="font-bold">
+                            {formatDate(date, "d")}
+                          </div>
                         </div>
                       </button>
                     );
@@ -822,11 +945,11 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                       type="button"
                       onClick={() => setSelectedColor(color.value)}
                       className={clsx(
-                        'p-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center',
+                        "p-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center",
                         color.bg,
                         selectedColor === color.value
-                          ? 'ring-2 ring-white shadow-lg scale-105'
-                          : 'hover:scale-105'
+                          ? "ring-2 ring-white shadow-lg scale-105"
+                          : "hover:scale-105"
                       )}
                     >
                       {color.label}
@@ -934,7 +1057,7 @@ const WeeklyPlannerPage = () => {
 
   // Memoized toggle complete handler for events
   const handleToggleComplete = useCallback((eventId: string) => {
-    setEvents((prevEvents) => 
+    setEvents((prevEvents) =>
       prevEvents.map((event) =>
         event.id === eventId ? { ...event, completed: !event.completed } : event
       )
@@ -951,7 +1074,7 @@ const WeeklyPlannerPage = () => {
   );
 
   // Memoized handler for adding new events
-  const handleAddEvent = useCallback((newEvent: Omit<Event, 'id'>) => {
+  const handleAddEvent = useCallback((newEvent: Omit<Event, "id">) => {
     setEvents((prevEvents) => [
       ...prevEvents,
       {
@@ -967,6 +1090,70 @@ const WeeklyPlannerPage = () => {
                 @import url('https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap');
                 * {
                     font-family: 'Rubik';
+                }
+                
+                /* Mobile drag enhancements */
+                @media (max-width: 768px) {
+                  .mobile-drag-active {
+                    border: 2px dashed rgba(168, 85, 247, 0.6) !important;
+                    background: rgba(168, 85, 247, 0.1) !important;
+                    transform: scale(1.02) !important;
+                  }
+                  
+                  /* Enhanced scroll prevention during drag */
+                  .dragging {
+                    overflow: hidden !important;
+                    position: fixed !important;
+                    width: 100% !important;
+                    height: 100% !important;
+                    -webkit-overflow-scrolling: touch !important;
+                  }
+                  
+                  .dragging * {
+                    user-select: none !important;
+                    -webkit-user-select: none !important;
+                    -moz-user-select: none !important;
+                    -ms-user-select: none !important;
+                    -webkit-touch-callout: none !important;
+                    -webkit-tap-highlight-color: transparent !important;
+                  }
+                  
+                  /* Prevent scroll behavior on the main container during drag */
+                  .dragging .min-h-screen {
+                    overflow: hidden !important;
+                    position: relative !important;
+                  }
+                  
+                  /* Enhance touch targets */
+                  .touch-manipulation {
+                    -webkit-touch-callout: none;
+                    -webkit-user-select: none;
+                    -khtml-user-select: none;
+                    -moz-user-select: none;
+                    -ms-user-select: none;
+                    user-select: none;
+                    touch-action: manipulation;
+                  }
+                  
+                  /* Prevent momentum scrolling during drag */
+                  .dragging * {
+                    -webkit-overflow-scrolling: auto !important;
+                  }
+                  
+                  /* Prevent rubber band scrolling on iOS */
+                  .dragging html, .dragging body {
+                    position: fixed !important;
+                    overflow: hidden !important;
+                    -webkit-overflow-scrolling: touch !important;
+                    height: 100% !important;
+                    width: 100% !important;
+                  }
+                  
+                  /* Disable pull-to-refresh during drag */
+                  .dragging {
+                    overscroll-behavior: none !important;
+                    -webkit-overscroll-behavior: none !important;
+                  }
                 }
             `}</style>
       <div className="min-h-screen w-full bg-gray-900 bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900 text-white p-4 md:p-8">
@@ -1021,19 +1208,19 @@ const WeeklyPlannerPage = () => {
           onClick={() => setIsAddEventModalOpen(true)}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
-          animate={{ 
+          animate={{
             boxShadow: [
               "0 0 0 0 rgba(168, 85, 247, 0.4)",
               "0 0 0 10px rgba(168, 85, 247, 0)",
-              "0 0 0 0 rgba(168, 85, 247, 0)"
-            ]
+              "0 0 0 0 rgba(168, 85, 247, 0)",
+            ],
           }}
           transition={{
             boxShadow: {
               duration: 2,
               repeat: Infinity,
-              ease: "easeInOut"
-            }
+              ease: "easeInOut",
+            },
           }}
           className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full shadow-lg hover:shadow-xl flex items-center justify-center text-white z-30 transition-all duration-300 touch-manipulation cursor-pointer"
           title="Add New Event"
@@ -1053,7 +1240,9 @@ const WeeklyPlannerPage = () => {
           isOpen={isAddEventModalOpen}
           onClose={() => setIsAddEventModalOpen(false)}
           onAddEvent={handleAddEvent}
-          selectedDate={selectedDay ? formatDate(selectedDay, "yyyy-MM-dd") : undefined}
+          selectedDate={
+            selectedDay ? formatDate(selectedDay, "yyyy-MM-dd") : undefined
+          }
         />
 
         <footer className="text-center mt-12 text-gray-400 text-sm">
