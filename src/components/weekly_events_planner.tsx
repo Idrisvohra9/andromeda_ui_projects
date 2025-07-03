@@ -13,98 +13,18 @@ import {
 } from "react-icons/io5";
 import { RxDragHandleDots2 } from "react-icons/rx";
 import { clsx } from "clsx";
-
-// --- DATE UTILITY FUNCTIONS ---
-
-// Formats a date according to the specified format string
-const formatDate = (date: Date, format: string): string => {
-  const days = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
-  const daysShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
-  const dayOfWeek = date.getDay();
-
-  switch (format) {
-    case "yyyy-MM-dd":
-      return `${year}-${String(month + 1).padStart(2, "0")}-${String(
-        day
-      ).padStart(2, "0")}`;
-    case "EEE":
-      return daysShort[dayOfWeek];
-    case "d":
-      return String(day);
-    case "EEEE":
-      return days[dayOfWeek];
-    case "MMMM d, yyyy":
-      return `${months[month]} ${day}, ${year}`;
-    default:
-      return date.toISOString();
-  }
-};
-
-// Returns the start of the week for a given date (Monday by default)
-const getStartOfWeek = (date: Date, weekStartsOn: number = 1): Date => {
-  const result = new Date(date);
-  const day = result.getDay();
-  const diff = (day < weekStartsOn ? 7 : 0) + day - weekStartsOn;
-  result.setDate(result.getDate() - diff);
-  result.setHours(0, 0, 0, 0);
-  return result;
-};
-
-// Adds a specified number of days to a date
-const addDays = (date: Date, amount: number): Date => {
-  const result = new Date(date);
-  result.setDate(result.getDate() + amount);
-  return result;
-};
-
-// Checks if two dates are the same day
-const isSameDay = (date1: Date, date2: Date): boolean => {
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
-  );
-};
-
-// Checks if a date is today
-const isToday = (date: Date): boolean => {
-  return isSameDay(date, new Date());
-};
-
-// Checks if a date is in the past (before today)
-const isPast = (date: Date): boolean => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const compareDate = new Date(date);
-  compareDate.setHours(0, 0, 0, 0);
-  return compareDate < today;
-};
+import {
+  format,
+  startOfWeek,
+  addDays,
+  isSameDay,
+  isToday,
+  isPast,
+  parseISO,
+} from "date-fns";
+import { DndProvider, useDrag, useDrop } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import { TouchBackend } from "react-dnd-touch-backend";
 
 // --- TYPE DEFINITIONS ---
 type Event = {
@@ -116,19 +36,31 @@ type Event = {
   completed: boolean;
 };
 
-// --- INITIAL DATA ---
+// DnD Item Types
+const ItemTypes = {
+  EVENT: "event",
+};
 
+// Detect if we're on a touch device
+const isTouchDevice = () => {
+  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+};
+
+// --- INITIAL DATA ---
+const taskCompleteSound = new Audio("/sounds/task-complete.mp3");
+const taskIncompleteSound = new Audio("/sounds/error.mp3");
+const taskAddedSound = new Audio("/sounds/pop.mp3");
 // Generates initial sample events for the current week
 const getInitialEvents = (): Event[] => {
   const today = new Date();
-  const startOfThisWeek = getStartOfWeek(today, 1); // Monday
+  const startOfThisWeek = startOfWeek(today, { weekStartsOn: 1 }); // Monday
 
   return [
     {
       id: "1",
       title: "Team Sync",
       description: "Weekly team synchronization meeting.",
-      day: formatDate(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
       color: "bg-cyan-500",
       completed: false,
     },
@@ -136,7 +68,7 @@ const getInitialEvents = (): Event[] => {
       id: "2",
       title: "Design Review",
       description: "Review the new dashboard design mockups.",
-      day: formatDate(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
       color: "bg-purple-500",
       completed: true,
     },
@@ -144,7 +76,7 @@ const getInitialEvents = (): Event[] => {
       id: "3",
       title: "Deploy to Staging",
       description: "Deploy the latest feature branch to the staging server.",
-      day: formatDate(addDays(startOfThisWeek, 1), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 1), "yyyy-MM-dd"),
       color: "bg-pink-500",
       completed: false,
     },
@@ -152,7 +84,7 @@ const getInitialEvents = (): Event[] => {
       id: "4",
       title: "Client Call",
       description: "Follow-up call with Project Unicorn client.",
-      day: formatDate(addDays(startOfThisWeek, 2), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 2), "yyyy-MM-dd"),
       color: "bg-yellow-400",
       completed: false,
     },
@@ -160,7 +92,7 @@ const getInitialEvents = (): Event[] => {
       id: "5",
       title: "Write Report",
       description: "Finalize and submit the Q3 performance report.",
-      day: formatDate(addDays(startOfThisWeek, 3), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 3), "yyyy-MM-dd"),
       color: "bg-green-500",
       completed: false,
     },
@@ -169,7 +101,7 @@ const getInitialEvents = (): Event[] => {
       title: "User Testing",
       description:
         "Conduct user testing session for the new mobile app feature.",
-      day: formatDate(addDays(startOfThisWeek, 4), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 4), "yyyy-MM-dd"),
       color: "bg-purple-500",
       completed: false,
     },
@@ -177,7 +109,7 @@ const getInitialEvents = (): Event[] => {
       id: "7",
       title: "Code Refactor",
       description: "Refactor the authentication module.",
-      day: formatDate(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
       color: "bg-pink-500",
       completed: false,
     },
@@ -185,7 +117,7 @@ const getInitialEvents = (): Event[] => {
       id: "8",
       title: "Submit Expenses",
       description: "Last day to submit monthly expenses.",
-      day: formatDate(addDays(startOfThisWeek, -2), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, -2), "yyyy-MM-dd"),
       color: "bg-yellow-400",
       completed: false,
     }, // Overdue task
@@ -193,7 +125,7 @@ const getInitialEvents = (): Event[] => {
       id: "9",
       title: "Plan Next Sprint",
       description: "Team meeting to plan tasks for the upcoming sprint.",
-      day: formatDate(addDays(startOfThisWeek, 4), "yyyy-MM-dd"),
+      day: format(addDays(startOfThisWeek, 4), "yyyy-MM-dd"),
       color: "bg-cyan-500",
       completed: false,
     },
@@ -202,166 +134,29 @@ const getInitialEvents = (): Event[] => {
 
 // --- SUB-COMPONENTS ---
 
-// Event card component with drag functionality and visual indicators
+// Event card component with react-dnd drag functionality
 interface EventCardProps {
   event: Event;
-  onDragStart: (event: Event) => void;
   onToggleComplete: (eventId: string) => void;
 }
 
-const EventCard: React.FC<EventCardProps> = ({
-  event,
-  onDragStart,
-  onToggleComplete,
-}) => {
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(
-    null
-  );
-  const [longPressTimer, setLongPressTimer] = useState<number | null>(
-    null
-  );
-
+const EventCard: React.FC<EventCardProps> = ({ event, onToggleComplete }) => {
   // Check if task is overdue (past due date and not completed)
+  const eventDate = parseISO(event.day);
   const isTaskOverdue =
-    isPast(new Date(event.day)) &&
-    !isToday(new Date(event.day)) &&
-    !event.completed;
+    isPast(eventDate) && !isToday(eventDate) && !event.completed;
 
-  // Utility function to prevent scroll during drag operations
-  const preventScroll = useCallback((e: TouchEvent | WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  // Handle drag start event with data transfer setup
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("text/plain", event.id);
-    e.dataTransfer.effectAllowed = "move";
-    onDragStart(event);
-  };
-
-  // Handle drag end event to reset visual state
-  const handleDragEnd = (e: React.DragEvent) => {
-    const target = e.currentTarget as HTMLElement;
-    if (target) {
-      target.classList.remove("opacity-50");
-    }
-  };
-
-  // Handle drag start visual feedback
-  const handleDragStartVisual = (e: React.DragEvent) => {
-    const target = e.currentTarget as HTMLElement;
-    if (target) {
-      target.classList.add("opacity-50");
-    }
-  };
-
-  // Enhanced touch handling for mobile drag and drop
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    setTouchStart({ x: touch.clientX, y: touch.clientY });
-
-    // Clear any existing timer
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-    }
-
-    // Add long press detection
-    const timer = setTimeout(() => {
-      setIsDragging(true);
-      onDragStart(event);
-
-      // Add visual feedback and trigger mobile drag start
-      const target = e.currentTarget as HTMLElement;
-      if (target) {
-        target.classList.add("opacity-75", "scale-105", "z-50");
-      }
-
-      document.dispatchEvent(new CustomEvent("mobile-drag-start"));
-
-      // Disable scrolling during drag
-      document.body.style.overflow = "hidden";
-      // Add dragging class to body for additional CSS rules
-      document.body.classList.add("dragging");
-
-      // Prevent default scroll behavior on document with non-passive listeners
-      document.addEventListener("touchmove", preventScroll, { passive: false });
-      document.addEventListener("wheel", preventScroll, { passive: false });
-    }, 800); // 800ms long press
-
-    setLongPressTimer(timer);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || !touchStart) return;
-
-    // Enhanced scroll prevention - block all scroll attempts
-    try {
-    //   e.preventDefault();
-      e.stopPropagation();
-    } catch {
-      // Silently handle passive event listener errors
-      console.warn("Could not prevent default on touch move");
-    }
-
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - touchStart.x;
-    const deltaY = touch.clientY - touchStart.y;
-
-    setDragOffset({ x: deltaX, y: deltaY });
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    // Clear long press timer
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      setLongPressTimer(null);
-    }
-
-    if (isDragging) {
-      // Find drop target
-      const touch = e.changedTouches[0];
-      const elementBelow = document.elementFromPoint(
-        touch.clientX,
-        touch.clientY
-      );
-      const dropZone = elementBelow?.closest("[data-drop-zone]");
-
-      if (dropZone) {
-        const dayString = dropZone.getAttribute("data-drop-zone");
-        if (dayString && dayString !== event.day) {
-          // Trigger drop
-          const dropEvent = new CustomEvent("mobile-drop", {
-            detail: { eventId: event.id, targetDay: dayString },
-          });
-          document.dispatchEvent(dropEvent);
-        }
-      }
-    }
-
-    // Reset states
-    setIsDragging(false);
-    setDragOffset({ x: 0, y: 0 });
-    setTouchStart(null);
-
-    const target = e.currentTarget as HTMLElement;
-    if (target) {
-      target.classList.remove("opacity-75", "scale-105", "z-50");
-    }
-
-    // Restore scroll behavior
-    document.body.classList.remove("dragging");
-    document.body.style.overflow = "";
-
-    // Remove scroll prevention event listeners
-    document.removeEventListener("touchmove", preventScroll);
-    document.removeEventListener("wheel", preventScroll);
-
-    // Trigger mobile drag end
-    document.dispatchEvent(new CustomEvent("mobile-drag-end"));
-  };
+  // react-dnd drag hook
+  const [{ isDragging }, drag, dragPreview] = useDrag(
+    () => ({
+      type: ItemTypes.EVENT,
+      item: { id: event.id, event },
+      collect: (monitor) => ({
+        isDragging: monitor.isDragging(),
+      }),
+    }),
+    [event]
+  );
 
   // Handle checkbox toggle
   const handleToggleComplete = (e: React.MouseEvent) => {
@@ -369,44 +164,22 @@ const EventCard: React.FC<EventCardProps> = ({
     onToggleComplete(event.id);
   };
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-      }
-    };
-  }, [longPressTimer]);
-
   return (
     <div
-      draggable
-      onDragStart={(e: React.DragEvent) => {
-        handleDragStart(e);
-        handleDragStartVisual(e);
-      }}
-      onDragEnd={handleDragEnd}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+      ref={dragPreview}
       className={clsx(
-        "group p-3 mb-2 rounded-xl text-white shadow-lg cursor-grab active:cursor-grabbing relative transition-all duration-300 ease-in-out hover:shadow-2xl hover:scale-105 hover:-translate-y-1 backdrop-blur-sm touch-manipulation",
+        "group p-3 mb-2 rounded-xl text-white shadow-lg relative transition-all duration-300 ease-in-out hover:shadow-2xl hover:scale-105 hover:-translate-y-1 backdrop-blur-sm touch-manipulation",
         event.color,
         event.completed && "opacity-60",
         "border border-white/10 hover:border-white/20",
-        isDragging && "fixed pointer-events-none z-50"
+        isDragging && "opacity-50 scale-95"
       )}
-      style={
-        isDragging
-          ? {
-              transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
-              zIndex: 9999,
-            }
-          : undefined
-      }
     >
       <div className="flex items-center">
-        <div className="touch-none flex-shrink-0">
+        <div
+          ref={drag}
+          className="touch-none flex-shrink-0 cursor-grab active:cursor-grabbing"
+        >
           <RxDragHandleDots2
             size={20}
             className="text-white/50 group-hover:text-white/80 transition-colors"
@@ -447,15 +220,12 @@ const EventCard: React.FC<EventCardProps> = ({
   );
 };
 
-// Day column component with drag and drop functionality
+// Day column component with react-dnd drop functionality
 interface DayColumnProps {
   day: Date;
   events: Event[];
   onDayClick: (day: Date) => void;
-  onDrop: (dayString: string) => void;
-  isDragOver: boolean;
-  onDragOver: (dayString: string | null) => void;
-  onDragStart: (event: Event) => void;
+  onMoveEvent: (eventId: string, targetDay: string) => void;
   onToggleComplete: (eventId: string) => void;
 }
 
@@ -463,100 +233,35 @@ const DayColumn: React.FC<DayColumnProps> = ({
   day,
   events,
   onDayClick,
-  onDrop,
-  isDragOver,
-  onDragOver,
-  onDragStart,
+  onMoveEvent,
   onToggleComplete,
 }) => {
-  const dayString = formatDate(day, "yyyy-MM-dd");
-  const dayFormat = "EEE"; // e.g., "Mon"
-  const dateFormat = "d"; // e.g., "5"
+  const dayString = format(day, "yyyy-MM-dd");
+  const dayFormat = format(day, "EEE"); // e.g., "Mon"
+  const dateFormat = format(day, "d"); // e.g., "5"
 
-  // Handle desktop drag events
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    onDragOver(dayString);
-  };
+  // react-dnd drop hook
+  const [{ isOver, canDrop }, drop] = useDrop(
+    () => ({
+      accept: ItemTypes.EVENT,
+      drop: (item: { id: string; event: Event }) => {
+        if (item.event.day !== dayString) {
+          onMoveEvent(item.id, dayString);
+        }
+      },
+      collect: (monitor) => ({
+        isOver: monitor.isOver(),
+        canDrop: monitor.canDrop(),
+      }),
+    }),
+    [dayString, onMoveEvent]
+  );
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    // Only trigger drag leave if we're actually leaving the drop zone
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX;
-    const y = e.clientY;
-
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      onDragOver(null);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    onDrop(dayString);
-    onDragOver(null);
-  };
-
-  // Handle mobile drop events
-  useEffect(() => {
-    const handleMobileDrop = (e: CustomEvent) => {
-      const { targetDay } = e.detail;
-      if (targetDay === dayString) {
-        onDrop(targetDay);
-      }
-    };
-
-    // Add visual feedback for mobile drag
-    const handleMobileDragStart = () => {
-      document.querySelectorAll("[data-drop-zone]").forEach((zone) => {
-        zone.classList.add("mobile-drag-active");
-      });
-
-      // Additional global scroll lock for better UX on mobile
-      const viewport = document.querySelector("meta[name=viewport]");
-      if (viewport) {
-        viewport.setAttribute(
-          "content",
-          "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-        );
-      }
-    };
-
-    const handleMobileDragEnd = () => {
-      document.querySelectorAll("[data-drop-zone]").forEach((zone) => {
-        zone.classList.remove("mobile-drag-active");
-      });
-
-      // Restore normal viewport behavior
-      const viewport = document.querySelector("meta[name=viewport]");
-      if (viewport) {
-        viewport.setAttribute(
-          "content",
-          "width=device-width, initial-scale=1.0"
-        );
-      }
-    };
-
-    document.addEventListener("mobile-drop", handleMobileDrop as EventListener);
-    document.addEventListener("mobile-drag-start", handleMobileDragStart);
-    document.addEventListener("mobile-drag-end", handleMobileDragEnd);
-
-    return () => {
-      document.removeEventListener(
-        "mobile-drop",
-        handleMobileDrop as EventListener
-      );
-      document.removeEventListener("mobile-drag-start", handleMobileDragStart);
-      document.removeEventListener("mobile-drag-end", handleMobileDragEnd);
-    };
-  }, [dayString, onDrop]);
+  const isDragOver = isOver && canDrop;
 
   return (
     <motion.div
-      data-drop-zone={dayString}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      ref={drop as any}
       onClick={() => onDayClick(day)}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -576,17 +281,15 @@ const DayColumn: React.FC<DayColumnProps> = ({
       )}
     >
       <div className="flex md:flex-col items-center md:items-start justify-between md:justify-start mb-4 md:mb-2">
-        <div className="flex items-baseline space-x-2 md:flex-col md:space-x-0 md:items-start">
-          <p className="font-bold text-lg text-purple-300">
-            {formatDate(day, dayFormat)}
-          </p>
+        <div className="flex items-baseline space-x-2 flex-col">
+          <p className="font-bold text-lg text-purple-300">{dayFormat}</p>
           <p
             className={clsx(
               "text-2xl font-light",
               isToday(day) ? "text-white" : "text-gray-400"
             )}
           >
-            {formatDate(day, dateFormat)}
+            {dateFormat}
           </p>
         </div>
         <div className="md:hidden h-full min-h-[120px] w-full ml-4">
@@ -595,7 +298,6 @@ const DayColumn: React.FC<DayColumnProps> = ({
               <EventCard
                 key={event.id}
                 event={event}
-                onDragStart={onDragStart}
                 onToggleComplete={onToggleComplete}
               />
             ))
@@ -612,7 +314,6 @@ const DayColumn: React.FC<DayColumnProps> = ({
             <EventCard
               key={event.id}
               event={event}
-              onDragStart={onDragStart}
               onToggleComplete={onToggleComplete}
             />
           ))
@@ -670,19 +371,20 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
 
             <div className="mb-6">
               <h2 className="text-3xl font-bold text-purple-300">
-                {formatDate(day, "EEEE")}
+                {format(day, "EEEE")}
               </h2>
               <p className="text-xl text-gray-300">
-                {formatDate(day, "MMMM d, yyyy")}
+                {format(day, "MMMM d, yyyy")}
               </p>
             </div>
 
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               {events.length > 0 ? (
                 events.map((event) => {
+                  const eventDate = parseISO(event.day);
                   const isTaskOverdue =
-                    isPast(new Date(event.day)) &&
-                    !isToday(new Date(event.day)) &&
+                    isPast(eventDate) &&
+                    !isToday(eventDate) &&
                     !event.completed;
                   return (
                     <div
@@ -797,7 +499,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
   // Generate week dates for date selector
   const weekDates = useMemo(() => {
     const today = new Date();
-    const start = getStartOfWeek(today, 1);
+    const start = startOfWeek(today, { weekStartsOn: 1 });
     return Array.from({ length: 7 }).map((_, i) => addDays(start, i));
   }, []);
 
@@ -806,7 +508,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
     if (isOpen) {
       setTitle("");
       setDescription("");
-      setSelectedDay(selectedDate || formatDate(new Date(), "yyyy-MM-dd"));
+      setSelectedDay(selectedDate || format(new Date(), "yyyy-MM-dd"));
       setSelectedColor("bg-cyan-500");
     }
   }, [isOpen, selectedDate]);
@@ -836,8 +538,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/60 backdrop-
-          blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 50 }}
@@ -901,10 +602,9 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                 </label>
                 <div className="grid grid-cols-7 gap-1">
                   {weekDates.map((date) => {
-                    const dateString = formatDate(date, "yyyy-MM-dd");
+                    const dateString = format(date, "yyyy-MM-dd");
                     const isSelected = selectedDay === dateString;
-                    const isToday =
-                      formatDate(new Date(), "yyyy-MM-dd") === dateString;
+                    const isTodayDate = isToday(date);
 
                     return (
                       <button
@@ -916,16 +616,14 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                           isSelected
                             ? "bg-purple-500 text-white shadow-lg"
                             : "bg-white/10 text-gray-300 hover:bg-white/20",
-                          isToday && !isSelected && "border border-purple-400"
+                          isTodayDate &&
+                            !isSelected &&
+                            "border border-purple-400"
                         )}
                       >
                         <div className="text-center">
-                          <div className="text-xs">
-                            {formatDate(date, "EEE")}
-                          </div>
-                          <div className="font-bold">
-                            {formatDate(date, "d")}
-                          </div>
+                          <div className="text-xs">{format(date, "EEE")}</div>
+                          <div className="font-bold">{format(date, "d")}</div>
                         </div>
                       </button>
                     );
@@ -985,13 +683,11 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
 
 // --- MAIN COMPONENT ---
 
-const WeeklyPlannerPage = () => {
+const WeeklyPlannerContent = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [weekDates, setWeekDates] = useState<Date[]>([]);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [draggedEvent, setDraggedEvent] = useState<Event | null>(null);
-  const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
 
   useEffect(() => {
@@ -999,7 +695,7 @@ const WeeklyPlannerPage = () => {
     setEvents(getInitialEvents());
 
     const today = new Date();
-    const start = getStartOfWeek(today, 1); // Monday
+    const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday
     const dates = Array.from({ length: 7 }).map((_, i) => addDays(start, i));
     setWeekDates(dates);
   }, []);
@@ -1007,39 +703,22 @@ const WeeklyPlannerPage = () => {
   // Memoized computation of events grouped by day for performance
   const eventsByDay = useMemo(() => {
     return weekDates.reduce<Record<string, Event[]>>((acc, day) => {
-      const dayKey = formatDate(day, "yyyy-MM-dd");
+      const dayKey = format(day, "yyyy-MM-dd");
       acc[dayKey] = events.filter((event) =>
-        isSameDay(new Date(event.day), day)
+        isSameDay(parseISO(event.day), day)
       );
       return acc;
     }, {});
   }, [events, weekDates]);
 
-  // Memoized drag start handler to prevent unnecessary re-renders
-  const handleDragStart = useCallback((event: Event) => {
-    setDraggedEvent(event);
-  }, []);
-
-  // Memoized drop handler for event rescheduling
-  const handleDrop = useCallback(
-    (targetDay: string) => {
-      if (!draggedEvent) return;
-
-      setEvents((prevEvents) => {
-        const updatedEvents = prevEvents.map((event) =>
-          event.id === draggedEvent.id ? { ...event, day: targetDay } : event
-        );
-        return updatedEvents;
-      });
-
-      setDraggedEvent(null);
-    },
-    [draggedEvent]
-  );
-
-  // Memoized drag over handler for visual feedback
-  const handleDragOver = useCallback((dayString: string | null) => {
-    setDragOverDay(dayString);
+  // Memoized move event handler for drag and drop
+  const handleMoveEvent = useCallback((eventId: string, targetDay: string) => {
+    setEvents((prevEvents) => {
+      const updatedEvents = prevEvents.map((event) =>
+        event.id === eventId ? { ...event, day: targetDay } : event
+      );
+      return updatedEvents;
+    });
   }, []);
 
   // Memoized day click handler for modal opening
@@ -1056,20 +735,34 @@ const WeeklyPlannerPage = () => {
   }, []);
 
   // Memoized toggle complete handler for events
-  const handleToggleComplete = useCallback((eventId: string) => {
-    setEvents((prevEvents) =>
-      prevEvents.map((event) =>
-        event.id === eventId ? { ...event, completed: !event.completed } : event
-      )
-    );
-  }, []);
+  const handleToggleComplete = useCallback(
+    (eventId: string) => {
+      setEvents((prevEvents) =>
+        prevEvents.map((event) =>
+          event.id === eventId
+            ? { ...event, completed: !event.completed }
+            : event
+        )
+      );
+      // Play sound effect when marking as complete
+      const completedEvent = events.find((event) => event.id === eventId);
+      if (completedEvent && !completedEvent.completed) {
+        taskCompleteSound.play().catch((error) => {
+          console.warn("Failed to play sound:", error);
+        });
+      } else {
+        taskIncompleteSound.play().catch((error) => {
+          console.warn("Failed to play sound:", error);
+        });
+      }
+    },
+    [events]
+  );
 
   // Memoized selected day events for modal display
   const selectedDayEvents = useMemo(
     () =>
-      selectedDay
-        ? eventsByDay[formatDate(selectedDay, "yyyy-MM-dd")] ?? []
-        : [],
+      selectedDay ? eventsByDay[format(selectedDay, "yyyy-MM-dd")] ?? [] : [],
     [selectedDay, eventsByDay]
   );
 
@@ -1091,40 +784,28 @@ const WeeklyPlannerPage = () => {
                 * {
                     font-family: 'Rubik';
                 }
+                button {
+                  cursor: pointer;
+                }
                 
-                /* Mobile drag enhancements */
+                /* Enhanced drag and drop styles */
+                .react-dnd-dragging {
+                  opacity: 0.5 !important;
+                  transform: scale(0.95) !important;
+                }
+                
+                .react-dnd-drop-target {
+                  transition: all 0.2s ease-in-out;
+                }
+                
+                .react-dnd-can-drop {
+                  background: rgba(168, 85, 247, 0.1) !important;
+                  border: 2px dashed rgba(168, 85, 247, 0.6) !important;
+                  transform: scale(1.02) !important;
+                }
+                
+                /* Mobile enhancements */
                 @media (max-width: 768px) {
-                  .mobile-drag-active {
-                    border: 2px dashed rgba(168, 85, 247, 0.6) !important;
-                    background: rgba(168, 85, 247, 0.1) !important;
-                    transform: scale(1.02) !important;
-                  }
-                  
-                  /* Enhanced scroll prevention during drag */
-                  .dragging {
-                    overflow: hidden !important;
-                    position: fixed !important;
-                    width: 100% !important;
-                    height: 100% !important;
-                    -webkit-overflow-scrolling: touch !important;
-                  }
-                  
-                  .dragging * {
-                    user-select: none !important;
-                    -webkit-user-select: none !important;
-                    -moz-user-select: none !important;
-                    -ms-user-select: none !important;
-                    -webkit-touch-callout: none !important;
-                    -webkit-tap-highlight-color: transparent !important;
-                  }
-                  
-                  /* Prevent scroll behavior on the main container during drag */
-                  .dragging .min-h-screen {
-                    overflow: hidden !important;
-                    position: relative !important;
-                  }
-                  
-                  /* Enhance touch targets */
                   .touch-manipulation {
                     -webkit-touch-callout: none;
                     -webkit-user-select: none;
@@ -1135,24 +816,10 @@ const WeeklyPlannerPage = () => {
                     touch-action: manipulation;
                   }
                   
-                  /* Prevent momentum scrolling during drag */
-                  .dragging * {
-                    -webkit-overflow-scrolling: auto !important;
-                  }
-                  
-                  /* Prevent rubber band scrolling on iOS */
-                  .dragging html, .dragging body {
-                    position: fixed !important;
-                    overflow: hidden !important;
-                    -webkit-overflow-scrolling: touch !important;
-                    height: 100% !important;
-                    width: 100% !important;
-                  }
-                  
-                  /* Disable pull-to-refresh during drag */
-                  .dragging {
-                    overscroll-behavior: none !important;
-                    -webkit-overscroll-behavior: none !important;
+                  /* Enhanced touch targets for mobile drag */
+                  .react-dnd-drag-handle {
+                    padding: 8px;
+                    margin: -8px;
                   }
                 }
             `}</style>
@@ -1166,7 +833,7 @@ const WeeklyPlannerPage = () => {
             to view detailed agenda.
           </p>
           <p className="text-gray-400 text-sm max-w-2xl mx-auto mt-2 md:hidden">
-            On mobile: Long press and drag to move tasks between days
+            On mobile: Touch and drag to move tasks between days
           </p>
           <div className="flex items-center justify-center mt-4 space-x-4 text-sm text-gray-400">
             <div className="flex items-center space-x-2">
@@ -1186,17 +853,14 @@ const WeeklyPlannerPage = () => {
 
         <main className="flex flex-col md:flex-row gap-2 md:gap-4 max-w-7xl mx-auto">
           {weekDates.map((day) => {
-            const dayString = formatDate(day, "yyyy-MM-dd");
+            const dayString = format(day, "yyyy-MM-dd");
             return (
               <DayColumn
                 key={day.toString()}
                 day={day}
                 events={eventsByDay[dayString] ?? []}
                 onDayClick={handleDayClick}
-                onDrop={handleDrop}
-                isDragOver={dragOverDay === dayString}
-                onDragOver={handleDragOver}
-                onDragStart={handleDragStart}
+                onMoveEvent={handleMoveEvent}
                 onToggleComplete={handleToggleComplete}
               />
             );
@@ -1241,17 +905,40 @@ const WeeklyPlannerPage = () => {
           onClose={() => setIsAddEventModalOpen(false)}
           onAddEvent={handleAddEvent}
           selectedDate={
-            selectedDay ? formatDate(selectedDay, "yyyy-MM-dd") : undefined
+            selectedDay ? format(selectedDay, "yyyy-MM-dd") : undefined
           }
         />
 
         <footer className="text-center mt-12 text-gray-400 text-sm">
           <p className="mb-2">
-            Built with React, TypeScript, Tailwind CSS & Framer Motion
+            Built with React, TypeScript, Tailwind CSS, Framer Motion & React
+            DnD
           </p>
         </footer>
       </div>
     </>
+  );
+};
+
+// Main component with DnD Provider
+const WeeklyPlannerPage = () => {
+  // Choose backend based on device type
+  const backend = isTouchDevice() ? TouchBackend : HTML5Backend;
+
+  // Backend options for touch devices
+  const backendOptions = isTouchDevice()
+    ? {
+        enableMouseEvents: true,
+        delayTouchStart: 200, // Delay before drag starts (ms)
+        delayMouseStart: 0,
+        touchSlop: 5, // Minimum distance to start drag
+      }
+    : {};
+
+  return (
+    <DndProvider backend={backend} options={backendOptions}>
+      <WeeklyPlannerContent />
+    </DndProvider>
   );
 };
 

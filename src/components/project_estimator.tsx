@@ -9,7 +9,6 @@ import {
   FiDownload,
   FiMoon,
   FiSun,
-  FiDollarSign,
   FiMaximize,
   FiMinimize,
   FiChevronDown,
@@ -24,6 +23,7 @@ import "prismjs/components/prism-java";
 import "prismjs/components/prism-go";
 import "prismjs/components/prism-ruby";
 import "prismjs/components/prism-typescript";
+import { IoClose } from "react-icons/io5";
 
 // Google Fonts import for Poppins and Outfit
 const fontImport = `@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');`;
@@ -31,6 +31,11 @@ const fontImport = `@import url('https://fonts.googleapis.com/css2?family=Poppin
 // Understanding the building blocks of our estimator
 // These types and constants define what languages we support and what features we can estimate
 type Language = "TypeScript" | "Python" | "Java" | "Go" | "Ruby";
+
+type Currency = {
+  name: string;
+  symbol: string;
+};
 
 // Data for languages and features
 const LANGUAGES = [
@@ -79,6 +84,12 @@ const METHODOLOGIES = [
   },
 ];
 
+const CURRENCIES = [
+  {name: "USD", symbol: "$"}, 
+  {name: "INR", symbol: "₹"},
+  {name: "JPY", symbol: "¥"}
+];
+
 type FeatureKey = (typeof FEATURES)[number]["key"];
 
 const defaultComplexity = FEATURES.reduce(
@@ -120,12 +131,19 @@ interface SectionProps {
   children: React.ReactNode;
   isDarkMode?: boolean;
   collapsible?: boolean;
+  className?: string;
 }
 
 // Smooth, animated collapsible sections that keep the interface organized
 // Uses framer-motion for professional-grade animations that feel responsive
 const Section: React.FC<SectionProps> = React.memo(
-  ({ title, children, isDarkMode = false, collapsible = false }) => {
+  ({
+    title,
+    children,
+    isDarkMode = false,
+    collapsible = false,
+    className = "",
+  }) => {
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     const toggleCollapse = useCallback(() => {
@@ -133,7 +151,7 @@ const Section: React.FC<SectionProps> = React.memo(
     }, []);
 
     return (
-      <div className="mb-8">
+      <div className={`mb-8 ${className}`}>
         <div
           className={`flex items-center justify-between border-b-2 border-[#FCA311] pb-2 mb-4 ${
             collapsible ? "cursor-pointer" : ""
@@ -466,7 +484,45 @@ const generatePseudocode = (
     return pseudoLines.join("\n");
   }
 };
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children?: React.ReactNode;
+}
 
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 50 }}
+            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-lg rounded-2xl border border-white/20 bg-gray-900/50 backdrop-blur-xl shadow-2xl p-6 text-white"
+          >
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            >
+              <IoClose size={24} />
+            </button>
+
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
 
 // The main calculator interface where users configure their projects
 // Includes the split-pane layout with controls on left, results on right
@@ -499,6 +555,8 @@ interface CalculatorPageProps {
     max: number;
     average: number;
   };
+  currency: Currency;
+  setShowCurrencyModal: (visible: boolean) => void;
 }
 
 const CalculatorPage: React.FC<CalculatorPageProps> = ({
@@ -525,6 +583,8 @@ const CalculatorPage: React.FC<CalculatorPageProps> = ({
   costRange,
   maximize,
   setMaximize,
+  currency,
+  setShowCurrencyModal,
 }) => {
   // Smart theme styling that adapts to light/dark mode preferences
   // Memoized to avoid regenerating CSS classes on every render
@@ -552,8 +612,8 @@ const CalculatorPage: React.FC<CalculatorPageProps> = ({
         : "mt-1 block w-full pl-4 pr-10 py-2 text-base bg-white border-2 border-gray-300 rounded-lg shadow-sm hover:border-[#FCA311] focus:outline-none focus:ring-2 focus:ring-[#FCA311] focus:border-[#FCA311] transition-all duration-200 cursor-pointer font-medium text-[#14213D]",
       // Label classes
       label: isDarkMode
-        ? "block text-sm font-medium text-gray-300 mb-1"
-        : "block text-sm font-medium text-gray-700 mb-1",
+        ? "block text-sm font-medium text-gray-300 mb-1 w-full"
+        : "block text-sm font-medium text-gray-700 mb-1 w-full",
       // Feature label classes
       featureLabel: isDarkMode ? "text-gray-300" : "text-gray-700",
       // Complexity label classes
@@ -578,8 +638,8 @@ const CalculatorPage: React.FC<CalculatorPageProps> = ({
         : "text-xs font-mono px-2 py-1 rounded bg-[#E5E5E5] text-[#14213D]",
       // Pseudocode container classes
       pseudocodeContainer: isDarkMode
-        ? "rounded-lg p-4 overflow-x-auto text-sm font-mono max-h-[400px] overflow-y-scroll bg-gray-800"
-        : "rounded-lg p-4 overflow-x-auto text-sm font-mono max-h-[400px] overflow-y-scroll bg-[#F8F8F8] border border-[#E5E5E5]",
+        ? "rounded-lg p-4 overflow-x-auto text-sm font-mono max-h-[400px] overflow-y-scroll bg-gray-800 mb-10"
+        : "rounded-lg p-4 overflow-x-auto text-sm font-mono max-h-[400px] overflow-y-scroll bg-[#F8F8F8] border border-[#E5E5E5] mb-10",
       // Divider classes
       divider: isDarkMode
         ? "hidden md:block w-2 bg-gray-700 hover:bg-[#FCA311] cursor-col-resize transition-colors"
@@ -682,12 +742,17 @@ const CalculatorPage: React.FC<CalculatorPageProps> = ({
             {/* Hourly Rate Input */}
             <div className="mb-4">
               <label htmlFor="hourly-rate" className={themeClasses.label}>
-                <FiDollarSign className="inline-block w-4 h-4 mr-1" />
-                Hourly Rate (USD)
+                Hourly Rate ({currency.name})
+                <button
+                  onClick={() => setShowCurrencyModal(true)}
+                  className="cursor-pointer float-right text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  Change
+                </button>
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                  $
+                  {currency.symbol}
                 </span>
                 <input
                   id="hourly-rate"
@@ -708,7 +773,7 @@ const CalculatorPage: React.FC<CalculatorPageProps> = ({
                   isDarkMode ? "text-gray-400" : "text-gray-500"
                 }`}
               >
-                Range: $1 - $1,000 per hour
+                Range: <span className="font-bold">1 - {currency.symbol}1,000</span> per hour
               </p>
             </div>
           </Section>
@@ -823,27 +888,35 @@ const CalculatorPage: React.FC<CalculatorPageProps> = ({
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className={`font-semibold ${
-                    isDarkMode ? "text-white" : "text-[#14213D]"
-                  }`}>
+                  <h4
+                    className={`font-semibold ${
+                      isDarkMode ? "text-white" : "text-[#14213D]"
+                    }`}
+                  >
                     Project Cost Range
                   </h4>
-                  <p className={`text-sm ${
-                    isDarkMode ? "text-gray-300" : "text-gray-600"
-                  }`}>
+                  <p
+                    className={`text-sm ${
+                      isDarkMode ? "text-gray-300" : "text-gray-600"
+                    }`}
+                  >
                     Based on ${hourlyRate}/hour rate
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className={`text-2xl font-bold ${
-                    isDarkMode ? "text-white" : "text-[#14213D]"
-                  }`}>
+                  <p
+                    className={`text-2xl font-bold ${
+                      isDarkMode ? "text-white" : "text-[#14213D]"
+                    }`}
+                  >
                     ${costRange.min.toLocaleString()} - $
                     {costRange.max.toLocaleString()}
                   </p>
-                  <p className={`text-sm ${
-                    isDarkMode ? "text-gray-300" : "text-gray-600"
-                  }`}>
+                  <p
+                    className={`text-sm ${
+                      isDarkMode ? "text-gray-300" : "text-gray-600"
+                    }`}
+                  >
                     Average: ${costRange.average.toLocaleString()}
                   </p>
                 </div>
@@ -950,6 +1023,8 @@ const ProjectEstimatorApp: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [maximize, setMaximize] = useState(false);
+  const [currency, setCurrency] = useState(CURRENCIES[0]);// Default currency
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -977,7 +1052,12 @@ const ProjectEstimatorApp: React.FC = () => {
   useEffect(() => {
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-
+    if (localStorage.getItem("isDarkMode") === "true") {
+      setIsDarkMode(true);
+    }
+    if (localStorage.getItem("currency")) {
+      setCurrency(JSON.parse(localStorage.getItem("currency") || "USD"));
+    }
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
@@ -1089,7 +1169,8 @@ const ProjectEstimatorApp: React.FC = () => {
   // Theme toggle handler to switch between light and dark modes
   const toggleTheme = useCallback(() => {
     setIsDarkMode((prev) => !prev);
-  }, []);
+    localStorage.setItem("isDarkMode", (!isDarkMode).toString());
+  }, [isDarkMode]);
 
   const handleFeatureToggle = useCallback((featureKey: FeatureKey) => {
     setFeatures((prev) => ({ ...prev, [featureKey]: !prev[featureKey] }));
@@ -1156,36 +1237,71 @@ const ProjectEstimatorApp: React.FC = () => {
     URL.revokeObjectURL(url);
   }, [calculationData, language, complexity, generatedPseudocode, hourlyRate]);
 
-
   return (
     <>
       <style>{fontImport}</style>
-        <CalculatorPage
-          language={language}
-          setLanguage={setLanguage}
-          features={features}
-          complexity={complexity}
-          estimates={estimates}
-          pseudocode={pseudocode}
-          handleExport={handleExport}
-          handleFeatureToggle={handleFeatureToggle}
-          handleComplexityChange={handleComplexityChange}
-          containerRef={containerRef}
-          isDragging={isDragging}
-          paneWidth={paneWidth}
-          handleMouseDown={handleMouseDown}
-          methodologyEstimates={calculationData.methodologyEstimates}
-          baseHours={calculationData.baseHours}
-          getLanguageClass={memoizedGetLanguageClass}
-          highlightPseudocode={memoizedHighlightPseudocode}
-          isDarkMode={isDarkMode}
-          toggleTheme={toggleTheme}
-          hourlyRate={hourlyRate}
-          setHourlyRate={handleHourlyRateChange}
-          costRange={calculationData.costRange}
-          maximize={maximize}
-          setMaximize={setMaximize}
-        />
+      <CalculatorPage
+        language={language}
+        setLanguage={setLanguage}
+        features={features}
+        complexity={complexity}
+        estimates={estimates}
+        pseudocode={pseudocode}
+        handleExport={handleExport}
+        handleFeatureToggle={handleFeatureToggle}
+        handleComplexityChange={handleComplexityChange}
+        containerRef={containerRef}
+        isDragging={isDragging}
+        paneWidth={paneWidth}
+        handleMouseDown={handleMouseDown}
+        methodologyEstimates={calculationData.methodologyEstimates}
+        baseHours={calculationData.baseHours}
+        getLanguageClass={memoizedGetLanguageClass}
+        highlightPseudocode={memoizedHighlightPseudocode}
+        isDarkMode={isDarkMode}
+        toggleTheme={toggleTheme}
+        hourlyRate={hourlyRate}
+        setHourlyRate={handleHourlyRateChange}
+        costRange={calculationData.costRange}
+        maximize={maximize}
+        setMaximize={setMaximize}
+        currency={currency}
+        setShowCurrencyModal={setShowCurrencyModal}
+      />
+      <Modal
+        isOpen={showCurrencyModal}
+        onClose={() => setShowCurrencyModal(false)}
+      >
+        <div>
+          <h2 className="text-lg font-bold mb-4">Select Currency</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {CURRENCIES.map((curr) => (
+              <button
+                key={curr.name}
+                onClick={() => {
+                  setCurrency(curr);
+                  localStorage.setItem("currency", JSON.stringify(curr));
+                }}
+                className={`p-3 rounded-lg border-2 cursor-pointer ${
+                  curr === currency
+                    ? "border-[#FCA311] bg-[#FCA311]/10"
+                    : isDarkMode
+                    ? "border-gray-600 bg-gray-700 text-white"
+                    : "border-gray-300 bg-gray-50 text-black"
+                } hover:bg-opacity-80 transition-colors`}
+              >
+                {curr.name} ({curr.symbol})
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowCurrencyModal(false)}
+            className="p-3 rounded-lg border-2 border-gray-300 bg-gray-50 text-black hover:bg-opacity-80 transition-colors w-full mt-6 cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
       <style>{`
         .slider-thumb::-webkit-slider-thumb {
             -webkit-appearance: none;
