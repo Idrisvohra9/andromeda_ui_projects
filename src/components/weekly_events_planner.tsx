@@ -10,6 +10,17 @@ import {
   IoCheckboxOutline,
   IoAdd,
   IoCalendar,
+  IoCalendarOutline,
+  IoPersonOutline,
+  IoLockClosedOutline,
+  IoMailOutline,
+  IoEyeOutline,
+  IoEyeOffOutline,
+  IoChevronBack,
+  IoChevronForward,
+  IoArrowForward,
+  IoTrash,
+  IoWarning,
 } from "react-icons/io5";
 import { RxDragHandleDots2 } from "react-icons/rx";
 import { clsx } from "clsx";
@@ -39,6 +50,7 @@ type Event = {
 // DnD Item Types
 const ItemTypes = {
   EVENT: "event",
+  TRASH: "trash",
 };
 
 // Detect if we're on a touch device
@@ -47,89 +59,13 @@ const isTouchDevice = () => {
 };
 
 // --- INITIAL DATA ---
-const taskCompleteSound = new Audio("/sounds/task-complete.mp3");
-const taskIncompleteSound = new Audio("/sounds/error.mp3");
-const taskAddedSound = new Audio("/sounds/pop.mp3");
-// Generates initial sample events for the current week
-const getInitialEvents = (): Event[] => {
-  const today = new Date();
-  const startOfThisWeek = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+const eventCompleteSound = new Audio("/sounds/event-complete.mp3");
+const eventIncompleteSound = new Audio("/sounds/error.mp3");
+const eventAddedSound = new Audio("/sounds/pop.mp3");
 
-  return [
-    {
-      id: "1",
-      title: "Team Sync",
-      description: "Weekly team synchronization meeting.",
-      day: format(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
-      color: "bg-cyan-500",
-      completed: false,
-    },
-    {
-      id: "2",
-      title: "Design Review",
-      description: "Review the new dashboard design mockups.",
-      day: format(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
-      color: "bg-purple-500",
-      completed: true,
-    },
-    {
-      id: "3",
-      title: "Deploy to Staging",
-      description: "Deploy the latest feature branch to the staging server.",
-      day: format(addDays(startOfThisWeek, 1), "yyyy-MM-dd"),
-      color: "bg-pink-500",
-      completed: false,
-    },
-    {
-      id: "4",
-      title: "Client Call",
-      description: "Follow-up call with Project Unicorn client.",
-      day: format(addDays(startOfThisWeek, 2), "yyyy-MM-dd"),
-      color: "bg-yellow-400",
-      completed: false,
-    },
-    {
-      id: "5",
-      title: "Write Report",
-      description: "Finalize and submit the Q3 performance report.",
-      day: format(addDays(startOfThisWeek, 3), "yyyy-MM-dd"),
-      color: "bg-green-500",
-      completed: false,
-    },
-    {
-      id: "6",
-      title: "User Testing",
-      description:
-        "Conduct user testing session for the new mobile app feature.",
-      day: format(addDays(startOfThisWeek, 4), "yyyy-MM-dd"),
-      color: "bg-purple-500",
-      completed: false,
-    },
-    {
-      id: "7",
-      title: "Code Refactor",
-      description: "Refactor the authentication module.",
-      day: format(addDays(startOfThisWeek, 0), "yyyy-MM-dd"),
-      color: "bg-pink-500",
-      completed: false,
-    },
-    {
-      id: "8",
-      title: "Submit Expenses",
-      description: "Last day to submit monthly expenses.",
-      day: format(addDays(startOfThisWeek, -2), "yyyy-MM-dd"),
-      color: "bg-yellow-400",
-      completed: false,
-    }, // Overdue task
-    {
-      id: "9",
-      title: "Plan Next Sprint",
-      description: "Team meeting to plan tasks for the upcoming sprint.",
-      day: format(addDays(startOfThisWeek, 4), "yyyy-MM-dd"),
-      color: "bg-cyan-500",
-      completed: false,
-    },
-  ];
+// Initialize with empty events array
+const getInitialEvents = (): Event[] => {
+  return [];
 };
 
 // --- SUB-COMPONENTS ---
@@ -138,24 +74,37 @@ const getInitialEvents = (): Event[] => {
 interface EventCardProps {
   event: Event;
   onToggleComplete: (eventId: string) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, onToggleComplete }) => {
-  // Check if task is overdue (past due date and not completed)
+const EventCard: React.FC<EventCardProps> = ({
+  event,
+  onToggleComplete,
+  onDragStart,
+  onDragEnd,
+}) => {
+  // Check if event is overdue (past due date and not completed)
   const eventDate = parseISO(event.day);
-  const isTaskOverdue =
+  const isEventOverdue =
     isPast(eventDate) && !isToday(eventDate) && !event.completed;
 
   // react-dnd drag hook
   const [{ isDragging }, drag, dragPreview] = useDrag(
     () => ({
       type: ItemTypes.EVENT,
-      item: { id: event.id, event },
+      item: () => {
+        onDragStart?.();
+        return { id: event.id, event };
+      },
       collect: (monitor) => ({
         isDragging: monitor.isDragging(),
       }),
+      end: () => {
+        onDragEnd?.();
+      },
     }),
-    [event]
+    [event, onDragStart, onDragEnd]
   );
 
   // Handle checkbox toggle
@@ -166,7 +115,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onToggleComplete }) => {
 
   return (
     <div
-      ref={dragPreview}
+      ref={dragPreview as unknown as React.RefObject<HTMLDivElement>}
       className={clsx(
         "group p-3 mb-2 rounded-xl text-white shadow-lg relative transition-all duration-300 ease-in-out hover:shadow-2xl hover:scale-105 hover:-translate-y-1 backdrop-blur-sm touch-manipulation",
         event.color,
@@ -177,7 +126,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onToggleComplete }) => {
     >
       <div className="flex items-center">
         <div
-          ref={drag}
+          ref={drag as unknown as React.RefObject<HTMLDivElement>}
           className="touch-none flex-shrink-0 cursor-grab active:cursor-grabbing"
         >
           <RxDragHandleDots2
@@ -208,7 +157,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onToggleComplete }) => {
               <IoCheckboxOutline size={18} className="hover:text-green-300" />
             )}
           </button>
-          {isTaskOverdue && (
+          {isEventOverdue && (
             <div
               className="w-3 h-3 bg-red-500 rounded-full border-2 border-gray-800"
               title="Overdue"
@@ -227,6 +176,8 @@ interface DayColumnProps {
   onDayClick: (day: Date) => void;
   onMoveEvent: (eventId: string, targetDay: string) => void;
   onToggleComplete: (eventId: string) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
 
 const DayColumn: React.FC<DayColumnProps> = ({
@@ -235,6 +186,8 @@ const DayColumn: React.FC<DayColumnProps> = ({
   onDayClick,
   onMoveEvent,
   onToggleComplete,
+  onDragStart,
+  onDragEnd,
 }) => {
   const dayString = format(day, "yyyy-MM-dd");
   const dayFormat = format(day, "EEE"); // e.g., "Mon"
@@ -261,7 +214,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
 
   return (
     <motion.div
-      ref={drop as any}
+      ref={drop as unknown as React.RefObject<HTMLDivElement>}
       onClick={() => onDayClick(day)}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -269,20 +222,26 @@ const DayColumn: React.FC<DayColumnProps> = ({
       whileHover={{ scale: 1.02 }}
       className={clsx(
         "flex-1 min-h-[200px] md:min-h-0 p-3 md:p-4 rounded-2xl border transition-all duration-300 ease-in-out cursor-pointer select-none",
-        "bg-white/5 backdrop-blur-lg shadow-lg hover:shadow-xl", // Enhanced glassmorphism
+        "backdrop-blur-lg shadow-lg hover:shadow-xl", // Enhanced glassmorphism
         isDragOver
-          ? "bg-white/20 border-purple-400 shadow-purple-400/25 scale-105"
-          : "hover:bg-white/10",
+          ? "border-opacity-100 shadow-xl scale-105"
+          : "hover:bg-opacity-80",
         isToday(day)
-          ? "border-purple-400 border-2 bg-purple-400/10"
+          ? "border-2 bg-opacity-20"
           : "border-white/10 hover:border-white/20",
         // Mobile-friendly touch target
         "touch-manipulation"
       )}
+      style={{
+        backgroundColor: isDragOver ? "#374151" : "#1F2937",
+        borderColor: isToday(day) ? "#FCA311" : "rgba(255, 255, 255, 0.1)",
+      }}
     >
       <div className="flex md:flex-col items-center md:items-start justify-between md:justify-start mb-4 md:mb-2">
         <div className="flex items-baseline space-x-2 flex-col">
-          <p className="font-bold text-lg text-purple-300">{dayFormat}</p>
+          <p className="font-bold text-lg" style={{ color: "#FCA311" }}>
+            {dayFormat}
+          </p>
           <p
             className={clsx(
               "text-2xl font-light",
@@ -299,6 +258,8 @@ const DayColumn: React.FC<DayColumnProps> = ({
                 key={event.id}
                 event={event}
                 onToggleComplete={onToggleComplete}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
               />
             ))
           ) : (
@@ -315,6 +276,8 @@ const DayColumn: React.FC<DayColumnProps> = ({
               key={event.id}
               event={event}
               onToggleComplete={onToggleComplete}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
             />
           ))
         ) : (
@@ -333,6 +296,7 @@ interface AgendaModalProps {
   day: Date | null;
   events: Event[];
   onToggleComplete: (eventId: string) => void;
+  onMoveEventToNextWeek: (eventId: string) => void;
 }
 
 const AgendaModal: React.FC<AgendaModalProps> = ({
@@ -341,6 +305,7 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
   day,
   events,
   onToggleComplete,
+  onMoveEventToNextWeek,
 }) => {
   if (!day) return null;
 
@@ -360,7 +325,8 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
             exit={{ scale: 0.9, opacity: 0, y: 50 }}
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg rounded-2xl border border-white/20 bg-gray-900/50 backdrop-blur-xl shadow-2xl p-6 text-white"
+            className="relative w-full max-w-lg rounded-2xl border border-white/20 backdrop-blur-xl shadow-2xl p-6 text-white"
+            style={{ backgroundColor: "#1F2937" }}
           >
             <button
               onClick={onClose}
@@ -370,7 +336,7 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
             </button>
 
             <div className="mb-6">
-              <h2 className="text-3xl font-bold text-purple-300">
+              <h2 className="text-3xl font-bold" style={{ color: "#FCA311" }}>
                 {format(day, "EEEE")}
               </h2>
               <p className="text-xl text-gray-300">
@@ -382,7 +348,7 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
               {events.length > 0 ? (
                 events.map((event) => {
                   const eventDate = parseISO(event.day);
-                  const isTaskOverdue =
+                  const isEventOverdue =
                     isPast(eventDate) &&
                     !isToday(eventDate) &&
                     !event.completed;
@@ -439,12 +405,32 @@ const AgendaModal: React.FC<AgendaModalProps> = ({
                             Completed
                           </div>
                         )}
-                        {isTaskOverdue && (
+                        {isEventOverdue && (
                           <div className="flex items-center">
                             <IoTime size={16} className="mr-1 text-red-400" />{" "}
                             Overdue
                           </div>
                         )}
+                        <motion.button
+                          onClick={() => {
+                            onMoveEventToNextWeek(event.id);
+                            // Show a brief success message
+                            console.log(
+                              `Event "${event.title}" moved to next week`
+                            );
+                          }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="flex items-center text-xs hover:text-white transition-colors px-3 py-1.5 rounded-md border border-white/20"
+                          style={{
+                            backgroundColor: "#374151",
+                            color: "#FCA311",
+                          }}
+                          title="Move this event to the same day next week"
+                        >
+                          <IoArrowForward size={12} className="mr-1" />
+                          Move to next week
+                        </motion.button>
                       </div>
                     </div>
                   );
@@ -468,6 +454,7 @@ interface AddEventModalProps {
   onClose: () => void;
   onAddEvent: (event: Omit<Event, "id">) => void;
   selectedDate?: string;
+  currentWeekStart: Date;
 }
 
 const AddEventModal: React.FC<AddEventModalProps> = ({
@@ -475,6 +462,7 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
   onClose,
   onAddEvent,
   selectedDate,
+  currentWeekStart,
 }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -485,11 +473,11 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
   const colorOptions = useMemo(
     () => [
       { value: "bg-cyan-500", label: "Cyan", bg: "bg-cyan-500" },
+      { value: "bg-blue-500", label: "Blue", bg: "bg-blue-500" },
       { value: "bg-purple-500", label: "Purple", bg: "bg-purple-500" },
       { value: "bg-pink-500", label: "Pink", bg: "bg-pink-500" },
       { value: "bg-yellow-400", label: "Yellow", bg: "bg-yellow-400" },
       { value: "bg-green-500", label: "Green", bg: "bg-green-500" },
-      { value: "bg-blue-500", label: "Blue", bg: "bg-blue-500" },
       { value: "bg-red-500", label: "Red", bg: "bg-red-500" },
       { value: "bg-indigo-500", label: "Indigo", bg: "bg-indigo-500" },
     ],
@@ -498,10 +486,9 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
 
   // Generate week dates for date selector
   const weekDates = useMemo(() => {
-    const today = new Date();
-    const start = startOfWeek(today, { weekStartsOn: 1 });
+    const start = startOfWeek(currentWeekStart, { weekStartsOn: 1 });
     return Array.from({ length: 7 }).map((_, i) => addDays(start, i));
-  }, []);
+  }, [currentWeekStart]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -527,6 +514,9 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
     };
 
     onAddEvent(newEvent);
+    eventAddedSound.play().catch((error) => {
+      console.warn("Failed to play sound:", error);
+    });
     onClose();
   };
 
@@ -546,7 +536,8 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
             exit={{ scale: 0.9, opacity: 0, y: 50 }}
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-2xl border border-white/20 bg-gray-900/50 backdrop-blur-xl shadow-2xl p-6 text-white"
+            className="relative w-full max-w-md rounded-2xl border border-white/20 backdrop-blur-xl shadow-2xl p-6 text-white"
+            style={{ backgroundColor: "#1F2937" }}
           >
             <button
               onClick={onClose}
@@ -556,7 +547,10 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
             </button>
 
             <div className="mb-6">
-              <h2 className="text-2xl font-bold text-purple-300 flex items-center">
+              <h2
+                className="text-2xl font-bold flex items-center"
+                style={{ color: "#FCA311" }}
+              >
                 <IoCalendar className="mr-2" />
                 Add New Event
               </h2>
@@ -576,7 +570,13 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Enter event title..."
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                  style={
+                    {
+                      backgroundColor: "#374151",
+                      "--tw-ring-color": "#FCA311",
+                    } as React.CSSProperties
+                  }
                   required
                 />
               </div>
@@ -591,7 +591,13 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Enter event description..."
                   rows={3}
-                  className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent resize-none"
+                  style={
+                    {
+                      backgroundColor: "#374151",
+                      "--tw-ring-color": "#FCA311",
+                    } as React.CSSProperties
+                  }
                 />
               </div>
 
@@ -614,12 +620,17 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                         className={clsx(
                           "p-2 rounded-lg text-xs font-medium transition-all duration-200",
                           isSelected
-                            ? "bg-purple-500 text-white shadow-lg"
-                            : "bg-white/10 text-gray-300 hover:bg-white/20",
-                          isTodayDate &&
-                            !isSelected &&
-                            "border border-purple-400"
+                            ? "text-white shadow-lg"
+                            : "text-gray-300 hover:bg-opacity-80",
+                          isTodayDate && !isSelected && "border"
                         )}
+                        style={{
+                          backgroundColor: isSelected ? "#FCA311" : "#374151",
+                          borderColor:
+                            isTodayDate && !isSelected
+                              ? "#FCA311"
+                              : "transparent",
+                        }}
                       >
                         <div className="text-center">
                           <div className="text-xs">{format(date, "EEE")}</div>
@@ -661,14 +672,16 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 px-4 py-2 text-gray-300 bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-colors"
+                  className="flex-1 px-4 py-2 text-gray-300 border border-white/20 rounded-lg hover:bg-opacity-80 transition-colors"
+                  style={{ backgroundColor: "#374151" }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!title.trim()}
-                  className="flex-1 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 px-4 py-2 text-white rounded-lg hover:bg-opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  style={{ backgroundColor: "#FCA311" }}
                 >
                   Add Event
                 </button>
@@ -681,6 +694,476 @@ const AddEventModal: React.FC<AddEventModalProps> = ({
   );
 };
 
+// Login Modal component for authentication
+interface LoginModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onLogin: (email: string, password: string) => void;
+}
+
+const LoginModal: React.FC<LoginModalProps> = ({
+  isOpen,
+  onClose,
+  onLogin,
+}) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setEmail("");
+      setPassword("");
+      setShowPassword(false);
+      setIsLoading(false);
+    }
+  }, [isOpen]);
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) return;
+
+    setIsLoading(true);
+
+    // Simulate login process
+    setTimeout(() => {
+      onLogin(email.trim(), password.trim());
+      setIsLoading(false);
+      onClose();
+    }, 1500);
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 50 }}
+            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md rounded-2xl border border-white/20 backdrop-blur-xl shadow-2xl p-6 text-white"
+            style={{ backgroundColor: "#1F2937" }}
+          >
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            >
+              <IoClose size={24} />
+            </button>
+
+            <div className="mb-6">
+              <h2
+                className="text-2xl font-bold flex items-center"
+                style={{ color: "#FCA311" }}
+              >
+                <IoPersonOutline className="mr-2" />
+                Welcome Back
+              </h2>
+              <p className="text-gray-300 text-sm mt-1">
+                Sign in to access your weekly planner
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <IoMailOutline
+                    size={20}
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email..."
+                    className="w-full pl-10 pr-3 py-2 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                    style={
+                      {
+                        backgroundColor: "#374151",
+                        "--tw-ring-color": "#FCA311",
+                      } as React.CSSProperties
+                    }
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <IoLockClosedOutline
+                    size={20}
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password..."
+                    className="w-full pl-10 pr-12 py-2 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                    style={
+                      {
+                        backgroundColor: "#374151",
+                        "--tw-ring-color": "#FCA311",
+                      } as React.CSSProperties
+                    }
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    {showPassword ? (
+                      <IoEyeOffOutline size={20} />
+                    ) : (
+                      <IoEyeOutline size={20} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Me & Forgot Password */}
+              <div className="flex items-center justify-between text-sm">
+                <label className="flex items-center text-gray-300">
+                  <input
+                    type="checkbox"
+                    className="mr-2 rounded border-gray-600 text-orange-500 focus:ring-orange-500 focus:ring-2"
+                  />
+                  Remember me
+                </label>
+                <button
+                  type="button"
+                  className="text-gray-400 hover:text-white transition-colors"
+                  style={{ color: "#FCA311" }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 px-4 py-2 text-gray-300 border border-white/20 rounded-lg hover:bg-opacity-80 transition-colors"
+                  style={{ backgroundColor: "#374151" }}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!email.trim() || !password.trim() || isLoading}
+                  className="flex-1 px-4 py-2 text-white rounded-lg hover:bg-opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                  style={{ backgroundColor: "#FCA311" }}
+                >
+                  {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    "Sign In"
+                  )}
+                </button>
+              </div>
+
+              {/* Sign Up Link */}
+              <div className="text-center text-sm text-gray-400 pt-4 border-t border-white/10">
+                Don't have an account?{" "}
+                <button
+                  type="button"
+                  className="hover:text-white transition-colors"
+                  style={{ color: "#FCA311" }}
+                >
+                  Create one here
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// Bottom Navigation Bar Component
+interface BottomNavBarProps {
+  isLoggedIn: boolean;
+  userEmail: string;
+  onLoginClick: () => void;
+}
+
+const BottomNavBar: React.FC<BottomNavBarProps> = ({
+  isLoggedIn,
+  userEmail,
+  onLoginClick,
+}) => {
+  return (
+    <motion.div
+      initial={{ y: 50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ delay: 0.5 }}
+      className="fixed bottom-0 left-0 right-0 bg-gray-800/80 backdrop-blur-md border-t border-gray-700"
+    >
+      <div className="max-w-md mx-auto px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+              <IoCalendarOutline className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-white font-medium text-sm">Weekly Planner</p>
+              <p className="text-gray-400 text-xs">
+                {isLoggedIn ? userEmail : "Guest User"}
+              </p>
+            </div>
+          </div>
+          {!isLoggedIn && (
+            <button
+              onClick={onLoginClick}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+            >
+              Login
+            </button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// Trash Area component for deleting events
+interface TrashAreaProps {
+  isVisible: boolean;
+  trashedEvents: Event[];
+  onDropEvent: (event: Event) => void;
+  onDeleteTrash: () => void;
+  onRemoveFromTrash: (eventId: string) => void;
+}
+
+const TrashArea: React.FC<TrashAreaProps> = ({
+  isVisible,
+  trashedEvents,
+  onDropEvent,
+  onDeleteTrash,
+  onRemoveFromTrash,
+}) => {
+  // react-dnd drop hook for trash area
+  const [{ isOver, canDrop }, drop] = useDrop(
+    () => ({
+      accept: ItemTypes.EVENT,
+      drop: (item: { id: string; event: Event }) => {
+        onDropEvent(item.event);
+      },
+      collect: (monitor) => ({
+        isOver: monitor.isOver(),
+        canDrop: monitor.canDrop(),
+      }),
+    }),
+    [onDropEvent]
+  );
+
+  const isDragOver = isOver && canDrop;
+
+  if (!isVisible) return null;
+
+  return (
+    <motion.div
+      initial={{ y: 100, opacity: 0, scale: 0.8 }}
+      animate={{ y: 0, opacity: 1, scale: 1 }}
+      exit={{ y: 100, opacity: 0, scale: 0.8 }}
+      transition={{ type: "spring", damping: 20, stiffness: 300 }}
+      className="fixed bottom-12 md:bottom-12 left-1/2 transform -translate-x-1/2 z-40"
+    >
+      <div
+        ref={drop as unknown as React.RefObject<HTMLDivElement>}
+        className={clsx(
+          "min-w-80 max-w-md p-4 rounded-2xl border transition-all duration-300 ease-in-out backdrop-blur-lg shadow-2xl",
+          isDragOver
+            ? "border-red-400 shadow-red-400/25 scale-105"
+            : "border-white/20",
+          trashedEvents.length > 0 ? "bg-red-900/30" : "bg-gray-800/80"
+        )}
+        style={{
+          backgroundColor: isDragOver
+            ? "rgba(239, 68, 17, 0.2)"
+            : trashedEvents.length > 0
+            ? "rgba(153, 27, 27, 0.3)"
+            : "rgba(31, 41, 55, 0.8)",
+        }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-3">
+            <div
+              className={clsx(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                trashedEvents.length > 0 ? "bg-red-500" : "bg-gray-600"
+              )}
+            >
+              <IoTrash size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white">
+                {isDragOver ? "Drop to Delete" : "Trash"}
+              </h3>
+              <p className="text-xs text-gray-400">
+                {trashedEvents.length > 0
+                  ? `${trashedEvents.length} event${
+                      trashedEvents.length > 1 ? "s" : ""
+                    } ready to delete`
+                  : "Drag events here to delete them"}
+              </p>
+            </div>
+          </div>
+
+          {trashedEvents.length > 0 && (
+            <motion.button
+              onClick={onDeleteTrash}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors shadow-lg"
+            >
+              Delete All
+            </motion.button>
+          )}
+        </div>
+
+        {/* Show trashed events */}
+        {trashedEvents.length > 0 && (
+          <div className="space-y-2 max-h-32 overflow-y-auto">
+            {trashedEvents.map((event) => (
+              <div
+                key={event.id}
+                className={clsx(
+                  "p-2 rounded-lg text-white text-sm opacity-70 flex items-center justify-between",
+                  event.color
+                )}
+              >
+                <div className="flex-1">
+                  <p className="font-medium">{event.title}</p>
+                  {event.description && (
+                    <p className="text-xs text-white/80 truncate">
+                      {event.description}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => onRemoveFromTrash(event.id)}
+                  className="ml-2 p-1 hover:bg-white/10 rounded text-white/60 hover:text-white transition-colors"
+                >
+                  <IoClose size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isDragOver && (
+          <div className="text-center py-4">
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+              className="text-red-400 text-lg font-semibold"
+            >
+              Release to delete event
+            </motion.div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+// Delete Confirmation Modal
+interface DeleteConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  eventCount: number;
+}
+
+const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  eventCount,
+}) => {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 50 }}
+            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md rounded-2xl border border-white/20 backdrop-blur-xl shadow-2xl p-6 text-white"
+            style={{ backgroundColor: "#1F2937" }}
+          >
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center">
+                <IoWarning size={32} className="text-white" />
+              </div>
+            </div>
+
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-white mb-2">
+                Delete Events?
+              </h2>
+              <p className="text-gray-300">
+                Are you sure you want to permanently delete{" "}
+                <span className="font-semibold text-red-400">
+                  {eventCount} event{eventCount > 1 ? "s" : ""}
+                </span>
+                ? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2 text-gray-300 border border-white/20 rounded-lg hover:bg-white/10 transition-colors"
+                style={{ backgroundColor: "#374151" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+              >
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
 // --- MAIN COMPONENT ---
 
 const WeeklyPlannerContent = () => {
@@ -689,15 +1172,41 @@ const WeeklyPlannerContent = () => {
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(new Date());
+  const [trashedEvents, setTrashedEvents] = useState<Event[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  // Sound effects function
+  const playSound = (sound: string) => {
+    try {
+      const audio = new Audio(`/sounds/${sound}`);
+      audio.play();
+    } catch (error) {
+      console.log("Sound playback failed:", error);
+    }
+  };
 
   useEffect(() => {
     // Set initial data only once on client-side mount
     setEvents(getInitialEvents());
+  }, []);
 
-    const today = new Date();
-    const start = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+  // Update week dates when currentWeekStart changes
+  useEffect(() => {
+    const start = startOfWeek(currentWeekStart, { weekStartsOn: 1 }); // Monday
     const dates = Array.from({ length: 7 }).map((_, i) => addDays(start, i));
     setWeekDates(dates);
+  }, [currentWeekStart]);
+
+  // Initialize currentWeekStart to current week
+  useEffect(() => {
+    const today = new Date();
+    const start = startOfWeek(today, { weekStartsOn: 1 });
+    setCurrentWeekStart(start);
   }, []);
 
   // Memoized computation of events grouped by day for performance
@@ -747,11 +1256,11 @@ const WeeklyPlannerContent = () => {
       // Play sound effect when marking as complete
       const completedEvent = events.find((event) => event.id === eventId);
       if (completedEvent && !completedEvent.completed) {
-        taskCompleteSound.play().catch((error) => {
+        eventCompleteSound.play().catch((error) => {
           console.warn("Failed to play sound:", error);
         });
       } else {
-        taskIncompleteSound.play().catch((error) => {
+        eventIncompleteSound.play().catch((error) => {
           console.warn("Failed to play sound:", error);
         });
       }
@@ -777,6 +1286,121 @@ const WeeklyPlannerContent = () => {
     ]);
   }, []);
 
+  // Memoized handler for user login
+  const handleLogin = useCallback((email: string, password: string) => {
+    setIsLoggedIn(true);
+    setUserEmail(email);
+    console.log("User logged in with email:", email);
+    // Here you can handle the actual login logic, e.g., API call
+    // Password validation would happen here in a real app
+    console.log(
+      "Password received (not logged for security):",
+      password ? "***" : ""
+    );
+  }, []);
+
+  // Memoized handler for opening login modal
+  const handleLoginClick = useCallback(() => {
+    setIsLoginModalOpen(true);
+  }, []);
+
+  // Memoized handler for navigating to previous week
+  const handlePreviousWeek = useCallback(() => {
+    setCurrentWeekStart((prev) => addDays(prev, -7));
+  }, []);
+
+  // Memoized handler for navigating to next week
+  const handleNextWeek = useCallback(() => {
+    setCurrentWeekStart((prev) => addDays(prev, 7));
+  }, []);
+
+  // Memoized handler for moving event to next week
+  const handleMoveEventToNextWeek = useCallback((eventId: string) => {
+    setEvents((prevEvents) =>
+      prevEvents.map((event) =>
+        event.id === eventId
+          ? {
+              ...event,
+              day: format(addDays(parseISO(event.day), 7), "yyyy-MM-dd"),
+            }
+          : event
+      )
+    );
+  }, []);
+
+  // Memoized handler for going to current week
+  const handleGoToCurrentWeek = useCallback(() => {
+    const today = new Date();
+    const start = startOfWeek(today, { weekStartsOn: 1 });
+    setCurrentWeekStart(start);
+  }, []);
+
+  // Check if we're viewing the current week
+  const isCurrentWeek = useMemo(() => {
+    const today = new Date();
+    const actualCurrentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+    const viewingWeekStart = startOfWeek(currentWeekStart, { weekStartsOn: 1 });
+    return (
+      format(actualCurrentWeekStart, "yyyy-MM-dd") ===
+      format(viewingWeekStart, "yyyy-MM-dd")
+    );
+  }, [currentWeekStart]);
+
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key) {
+          case "ArrowLeft":
+            event.preventDefault();
+            handlePreviousWeek();
+            break;
+          case "ArrowRight":
+            event.preventDefault();
+            handleNextWeek();
+            break;
+          case "h":
+            event.preventDefault();
+            handleGoToCurrentWeek();
+            break;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handlePreviousWeek, handleNextWeek, handleGoToCurrentWeek]);
+
+  // Handle dropping events in trash
+  const handleTrashDrop = useCallback((event: Event) => {
+    setTrashedEvents((prev) => [...prev, event]);
+    setEvents((prev) => prev.filter((e) => e.id !== event.id));
+    setIsDragging(false);
+    playSound("pop.mp3");
+  }, []);
+
+  // Handle removing events from trash
+  const handleRemoveFromTrash = useCallback((eventId: string) => {
+    setTrashedEvents((prev) => prev.filter((e) => e.id !== eventId));
+  }, []);
+
+  // Handle permanent deletion of all trashed events
+  const handlePermanentDelete = useCallback(() => {
+    setTrashedEvents([]);
+    setIsDeleteConfirmOpen(false);
+    playSound("event-complete.mp3");
+  }, []);
+
+  // Handle drag start to show trash area
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+  }, []);
+
+  // Handle drag end to hide trash area
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   return (
     <>
       <style>{`
@@ -799,8 +1423,8 @@ const WeeklyPlannerContent = () => {
                 }
                 
                 .react-dnd-can-drop {
-                  background: rgba(168, 85, 247, 0.1) !important;
-                  border: 2px dashed rgba(168, 85, 247, 0.6) !important;
+                  background: rgba(252, 163, 17, 0.1) !important;
+                  border: 2px dashed rgba(252, 163, 17, 0.6) !important;
                   transform: scale(1.02) !important;
                 }
                 
@@ -823,21 +1447,83 @@ const WeeklyPlannerContent = () => {
                   }
                 }
             `}</style>
-      <div className="min-h-screen w-full bg-gray-900 bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900 text-white p-4 md:p-8">
+      <div
+        className="min-h-screen w-full bg-gray-900 text-white p-4 md:p-8 pb-24 md:pb-28"
+        style={{ backgroundColor: "#111827" }}
+      >
         <header className="text-center mb-8">
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 mb-4">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-400 mb-4">
             Weekly Planner
           </h1>
+
+          {/* Week Navigation */}
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <motion.button
+              onClick={handlePreviousWeek}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="p-3 rounded-full border border-white/20 hover:bg-white/10 transition-colors"
+              style={{ backgroundColor: "#374151" }}
+            >
+              <IoChevronBack size={20} className="text-white" />
+            </motion.button>
+
+            <div className="flex flex-col items-center">
+              <h2 className="text-xl md:text-2xl font-semibold text-white mb-1">
+                {format(weekDates[0] || new Date(), "MMMM yyyy")}
+              </h2>
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span>
+                  {format(weekDates[0] || new Date(), "MMM d")} -{" "}
+                  {format(weekDates[6] || new Date(), "MMM d")}
+                </span>
+                {isCurrentWeek && (
+                  <span
+                    className="px-2 py-1 rounded-full text-xs font-medium"
+                    style={{ backgroundColor: "#FCA311", color: "white" }}
+                  >
+                    This Week
+                  </span>
+                )}
+                {!isCurrentWeek && (
+                  <motion.button
+                    onClick={handleGoToCurrentWeek}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-3 py-1 rounded-full text-xs font-medium transition-colors border border-white/20"
+                    style={{ backgroundColor: "#374151", color: "#FCA311" }}
+                  >
+                    Go to current week
+                  </motion.button>
+                )}
+              </div>
+            </div>
+
+            <motion.button
+              onClick={handleNextWeek}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="p-3 rounded-full border border-white/20 hover:bg-white/10 transition-colors"
+              style={{ backgroundColor: "#374151" }}
+            >
+              <IoChevronForward size={20} className="text-white" />
+            </motion.button>
+          </div>
+
           <p className="text-gray-300 text-lg max-w-2xl mx-auto leading-relaxed">
-            Drag and drop tasks to reschedule them effortlessly. Click any day
-            to view detailed agenda.
+            {events.length === 0
+              ? "Your weekly planner is empty. Click the + button to add your first event!"
+              : "Drag and drop events to reschedule them effortlessly. Click any day to view detailed agenda."}
           </p>
           <p className="text-gray-400 text-sm max-w-2xl mx-auto mt-2 md:hidden">
-            On mobile: Touch and drag to move tasks between days
+            On mobile: Touch and drag to move events between days
           </p>
           <div className="flex items-center justify-center mt-4 space-x-4 text-sm text-gray-400">
             <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-purple-400 rounded-full border-2 border-purple-300"></div>
+              <div
+                className="w-3 h-3 rounded-full border-2"
+                style={{ backgroundColor: "#FCA311", borderColor: "#FCA311" }}
+              ></div>
               <span>Today</span>
             </div>
             <div className="flex items-center space-x-2">
@@ -848,6 +1534,12 @@ const WeeklyPlannerContent = () => {
               <IoCheckmarkCircle size={14} className="text-green-400" />
               <span>Completed</span>
             </div>
+          </div>
+
+          {/* Keyboard shortcuts hint */}
+          <div className="hidden md:block text-xs text-gray-500 mt-4">
+            <span className="mr-4">Ctrl/Cmd + ← → Navigate weeks</span>
+            <span>Ctrl/Cmd + H: Go to current week</span>
           </div>
         </header>
 
@@ -862,6 +1554,8 @@ const WeeklyPlannerContent = () => {
                 onDayClick={handleDayClick}
                 onMoveEvent={handleMoveEvent}
                 onToggleComplete={handleToggleComplete}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
               />
             );
           })}
@@ -874,9 +1568,9 @@ const WeeklyPlannerContent = () => {
           whileTap={{ scale: 0.95 }}
           animate={{
             boxShadow: [
-              "0 0 0 0 rgba(168, 85, 247, 0.4)",
-              "0 0 0 10px rgba(168, 85, 247, 0)",
-              "0 0 0 0 rgba(168, 85, 247, 0)",
+              "0 0 0 0 rgba(252, 163, 17, 0.4)",
+              "0 0 0 10px rgba(252, 163, 17, 0)",
+              "0 0 0 0 rgba(252, 163, 17, 0)",
             ],
           }}
           transition={{
@@ -886,7 +1580,8 @@ const WeeklyPlannerContent = () => {
               ease: "easeInOut",
             },
           }}
-          className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full shadow-lg hover:shadow-xl flex items-center justify-center text-white z-30 transition-all duration-300 touch-manipulation cursor-pointer"
+          className="fixed bottom-6 right-6 w-16 h-16 rounded-full shadow-lg hover:shadow-xl flex items-center justify-center text-white z-30 transition-all duration-300 touch-manipulation cursor-pointer"
+          style={{ backgroundColor: "#FCA311" }}
           title="Add New Event"
         >
           <IoAdd size={28} />
@@ -898,15 +1593,44 @@ const WeeklyPlannerContent = () => {
           day={selectedDay}
           events={selectedDayEvents}
           onToggleComplete={handleToggleComplete}
+          onMoveEventToNextWeek={handleMoveEventToNextWeek}
         />
 
         <AddEventModal
           isOpen={isAddEventModalOpen}
           onClose={() => setIsAddEventModalOpen(false)}
           onAddEvent={handleAddEvent}
+          currentWeekStart={currentWeekStart}
           selectedDate={
             selectedDay ? format(selectedDay, "yyyy-MM-dd") : undefined
           }
+        />
+
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          onClose={() => setIsLoginModalOpen(false)}
+          onLogin={handleLogin}
+        />
+
+        <TrashArea
+          isVisible={isDragging || trashedEvents.length > 0}
+          trashedEvents={trashedEvents}
+          onDropEvent={handleTrashDrop}
+          onDeleteTrash={() => setIsDeleteConfirmOpen(true)}
+          onRemoveFromTrash={handleRemoveFromTrash}
+        />
+
+        <DeleteConfirmModal
+          isOpen={isDeleteConfirmOpen}
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          onConfirm={handlePermanentDelete}
+          eventCount={trashedEvents.length}
+        />
+
+        <BottomNavBar
+          isLoggedIn={isLoggedIn}
+          userEmail={userEmail}
+          onLoginClick={handleLoginClick}
         />
 
         <footer className="text-center mt-12 text-gray-400 text-sm">
